@@ -1,4 +1,3 @@
-import { send } from "vite";
 import User from "../models/User.js";
 import e from "express";
 import cloudinary from "../lib/cloudinary.js";

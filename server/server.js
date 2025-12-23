@@ -43,7 +43,7 @@ app.use('/api/messages',messageRouter);
 
 //connect to mongodb
 await connectdb();
-if(PROCESS.ENV.NODE_ENV!=="production"){
+if(process.env.NODE_ENV!=="production"){
 
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => {

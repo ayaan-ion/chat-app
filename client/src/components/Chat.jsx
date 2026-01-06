@@ -6,13 +6,99 @@ import { ChatContext } from "../../context/ChatContext.jsx";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import IncomingCall from "./Incomingcall.jsx";
+import { useWebRTC } from "../library/useWebRtc.js";
+import CallScreen from "./CallScreen.jsx";
 
 const Chat = () => {
   const { messages, selectedUser, setselectedUser, sendMessage, getMessages } =
     useContext(ChatContext);
-  const { authuser, onlineUsers } = useContext(AuthContext);
+  const { authuser, onlineUsers , socket } = useContext(AuthContext);
   const scrollEnd = useRef();
   const [input, setInput] = useState("");
+  const [incomingCall, setIncomingCall] = useState(null);
+  const {
+  localStreamRef,
+  remoteStreamRef,
+  createOffer,
+  createAnswer,
+  setRemoteAnswer,
+  addIceCandidate,
+  attachRemoteStream,
+  endCall
+} = useWebRTC(socket, authuser, selectedUser);
+const [inCall, setInCall] = useState(false);
+const [callType, setCallType] = useState(null);
+
+
+  useEffect(() => {
+  if (!socket) return;
+
+  // 🔔 Incoming ringing
+  socket.on("webrtc-offer", ({ offer, from, callType }) => {
+  setIncomingCall({
+    from,
+    callType,
+    offer
+  });
+});
+
+
+  // 📩 WebRTC answer
+  socket.on("webrtc-answer", async ({ answer }) => {
+  if (!answer) return;
+  await setRemoteAnswer(answer);
+});
+
+
+  // ❄ ICE
+  socket.on("webrtc-ice", async ({ candidate }) => {
+    await addIceCandidate(candidate);
+  });
+
+  // ❌ End call
+ socket.on("call-ended", () => {
+  endCall();              // close WebRTC
+  setInCall(false);       // close CallScreen UI
+  setIncomingCall(null);  // close IncomingCall UI
+  setCallType(null);
+});
+
+
+  return () => {
+  socket.off("webrtc-offer");
+  socket.off("webrtc-answer");
+  socket.off("webrtc-ice");
+  socket.off("call-ended");
+  };
+}, [socket]);
+
+
+
+
+
+  
+const startCall = async (type) => {
+  if (!socket || !selectedUser?._id) return;
+
+  setCallType(type);
+  setInCall(true);                 // ✅ START UI
+  await createOffer(type);         // ✅ START WEBRTC
+
+  socket.emit("call-user", {
+    to: selectedUser._id,
+    from: authuser._id,
+    callType: type
+  });
+};
+
+
+
+
+
+
+
+
   //handle send message
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -46,6 +132,49 @@ const Chat = () => {
   }, [messages]);
   return selectedUser ? (
     <div className="h-full overflow-scroll relative backdrop-blur-lg">
+      {inCall && (
+  <CallScreen
+    localRef={localStreamRef}
+    remoteRef={remoteStreamRef}
+    attachRemoteStream={attachRemoteStream}
+    onEnd={() => {
+  socket.emit("end-call", {
+    to: selectedUser?._id
+  });
+}}
+
+  />
+)}
+
+        {incomingCall && (
+    <IncomingCall
+      caller={incomingCall.from}
+      callType={incomingCall.callType}
+      onAccept={async () => {
+      if (!incomingCall.offer) return; // ✅ protect
+
+        setCallType(incomingCall.callType);
+        setInCall(true);
+
+      await createAnswer(
+        incomingCall.offer,
+        incomingCall.callType,
+        incomingCall.from
+    );
+
+    setIncomingCall(null);
+  }}
+
+
+
+      onReject={() => {
+  socket.emit("end-call", {
+    to: incomingCall.from
+  });
+}}
+
+    />
+  )}
       {/* //headrer-part */}
       <div className="flex items-center gap-3 py-3 mx-4 border-b border-stone-500">
         <img
@@ -59,6 +188,24 @@ const Chat = () => {
             <span className="w-2 h-2 rounded-full bg-green-500"></span>
           )}
         </p>
+        <div className="flex items-center gap-3">
+  <button
+    onClick={() => startCall("audio")}
+    className="p-2 rounded-full bg-green-600 hover:bg-green-700"
+    title="Voice call"
+  >
+    📞
+  </button>
+
+  <button
+    onClick={() => startCall("video")}
+    className="p-2 rounded-full bg-blue-600 hover:bg-blue-700"
+    title="Video call"
+  >
+    🎥
+  </button>
+</div>
+
         <img
           onClick={() => setselectedUser(null)}
           src={assets.arrow_icon}

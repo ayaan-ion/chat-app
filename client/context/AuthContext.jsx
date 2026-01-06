@@ -3,6 +3,9 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useState } from "react";
 import {io} from "socket.io-client";
+import { useRef } from "react";
+
+
 
 
 const backendURL = import.meta.env.VITE_BACKEND_URL;
@@ -16,6 +19,9 @@ export const AuthProvider = ({ children }) => {
     const [authuser, setAuthuser] = useState(null);
     const [onlineUsers, setOnlineusers] = useState([]);
     const [socket, setSocket] = useState(null);
+    const socketRef = useRef(null);
+
+
 
     //check if user is authenticated and if so set the user data and connect the socket
     const checkAuth = async () => {
@@ -26,7 +32,7 @@ export const AuthProvider = ({ children }) => {
                 connectSocket(data.user);
             }
         } catch (error) {
-            toast.error("error.message");
+            toast.error(error.message);
             
         }
     }
@@ -51,15 +57,22 @@ export const AuthProvider = ({ children }) => {
 
     }
     //logout function to handle user logout and socket disconnection
-    const logout=async()=>{
-        localStorage.removeItem("token");
-        setToken(null);
-        setAuthuser(null);
-        setOnlineusers([]);
-        axios.defaults.headers.common["token"]=null;
-        toast.success("logged out successfully");
-        socket.disconnect();
-    }
+    const logout = async () => {
+  localStorage.removeItem("token");
+  setToken(null);
+  setAuthuser(null);
+  setOnlineusers([]);
+  axios.defaults.headers.common["token"] = null;
+  toast.success("logged out successfully");
+
+  if (socketRef.current) {
+    socketRef.current.disconnect();
+    socketRef.current = null;
+  }
+
+  setSocket(null);
+};
+
     // update user profile function to handle user profile updates
     const updateProfile=async(body)=>{
         try {
@@ -75,27 +88,43 @@ export const AuthProvider = ({ children }) => {
     }
 
     // connect socket function to handle socket connection and online user updates
-    const connectSocket=(userData)=>{
-        if(!userData||socket?.connected)return;
-        const newSocket=io(backendURL,{
-            query:{
-                userId:userData._id
-            }
-        });
-        newSocket.connect();
-        setSocket(newSocket);
-        newSocket.on("getonlineusers",(usersIds)=>{
-            setOnlineusers(usersIds);
-        })
+    const connectSocket = (userData) => {
+  if (!userData) return;
 
+  // prevent multiple sockets
+  if (socketRef.current) return;
+
+  console.log("🔌 Connecting socket for user:", userData._id);
+
+  const newSocket = io(backendURL, {
+    query: {
+      userId: userData._id
     }
-    useEffect(()=>{
-        if(token){
-            axios.defaults.headers.common["token"]=token;
-        }
-        checkAuth();
+  });
 
-    },[]);      
+  socketRef.current = newSocket;
+  setSocket(newSocket);
+
+  newSocket.on("connect", () => {
+    console.log("✅ Socket connected:", newSocket.id);
+  });
+
+  newSocket.on("getonlineusers", (usersIds) => {
+    setOnlineusers(usersIds);
+  });
+
+  newSocket.on("disconnect", () => {
+    console.log("❌ Socket disconnected");
+    socketRef.current = null;
+  });
+};
+
+    useEffect(() => {
+  if (token) {
+    axios.defaults.headers.common["token"] = token;
+  }
+  checkAuth();
+}, [token]);
 
 
     const value={

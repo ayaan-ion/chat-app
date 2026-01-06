@@ -23,8 +23,76 @@ io.on("connection",(socket)=>{
     if(userId){
         usersocektMap[userId]=socket.id;
     }
+
+    
+
+    // ===== WEBRTC SIGNALING =====
+
+socket.on("webrtc-offer", ({ to, offer }) => {
+  const targetSocketId = usersocektMap[to];
+  if (targetSocketId) {
+    io.to(targetSocketId).emit("webrtc-offer", {
+      offer,
+      from: userId   // ✅ ADD THIS
+    });
+  }
+});
+
+
+socket.on("webrtc-answer", ({ to, answer }) => {
+  const targetSocketId = usersocektMap[to];
+  if (targetSocketId) {
+    io.to(targetSocketId).emit("webrtc-answer", { answer });
+  }
+});
+
+socket.on("webrtc-ice", ({ to, candidate }) => {
+  const targetSocketId = usersocektMap[to];
+  if (targetSocketId) {
+    io.to(targetSocketId).emit("webrtc-ice", { candidate });
+  }
+});
+
     //emit online users  to all connected users
     io.emit("getonlineusers",Object.keys(usersocektMap));
+    // ================= CALL EVENTS =================
+
+// when caller initiates a call
+socket.on("call-user", ({ to, from, callType }) => {
+    const targetSocketId = usersocektMap[to];
+    if (targetSocketId) {
+        io.to(targetSocketId).emit("incoming-call", {
+            from,
+            callType
+        });
+    }
+});
+
+
+// when receiver accepts the call
+socket.on("accept-call", ({ to, answer }) => {
+    const targetSocketId = usersocektMap[to];
+    if (targetSocketId) {
+        io.to(targetSocketId).emit("call-accepted", {
+            answer
+        });
+    }
+});
+
+// when either user ends the call
+socket.on("end-call", ({ to }) => {
+    const targetSocketId = usersocektMap[to];
+
+    // send to OTHER user
+    if (targetSocketId) {
+        io.to(targetSocketId).emit("call-ended");
+    }
+
+    // send to SELF also
+    socket.emit("call-ended");
+});
+
+
     socket.on("disconnect",()=>{
         console.log("user disconnected with id:",userId);
         delete usersocektMap[userId];

@@ -1,4 +1,5 @@
 import React from "react";
+// Component to display incoming call notification
 
 const IncomingCall = ({ caller, callType, onAccept, onReject }) => {
   return (

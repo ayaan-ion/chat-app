@@ -6,7 +6,7 @@ import { ChatContext } from "../../context/ChatContext.jsx";
 import { AuthContext } from "../../context/AuthContext.jsx";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import IncomingCall from "./Incomingcall.jsx";
+import Incomingcall from "./Incomingcall.jsx";
 import { useWebRTC } from "../library/useWebRtc.js";
 import CallScreen from "./CallScreen.jsx";
 
